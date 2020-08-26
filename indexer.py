@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
+import subprocess
+
 import getopt as go
-import sys
-import os
+import sys, os, fcntl, struct
 import time
 import hashlib
 import uuid
@@ -9,7 +10,6 @@ import sqlite3
 import platform
 from sqlite3 import Error
 
-#Python 3
 
 
 create_fileindex_table = """
@@ -93,17 +93,46 @@ print(f"Name of the script      : {sys.argv[0]}")
 print(f"Arguments of the script : {sys.argv[1:]}")
 
 argv = sys.argv[1:]
-sum = 0
 try:
-    opts, args = go.getopt(argv, 'r:d:', ['root', 'database'])
-#if len(opts) == 0 or len(opts) > 2:
-#    print ('usage: w.py -r <root director> -d <sqlite database file>')
-#print(foperand)
-except go.GetoptError as e:
+    opts, args = go.getopt(argv, 'h:r:d:', ['disk','root', 'database'])
+    print(opts)
+    print(args)
+    for opt, arg in opts:
+        if opt in ('-h', '--disk'):
+            print("DISK!!!!",arg)
+            disk = arg
+        elif opt in ('-r', '--root'):
+            root = arg
+        elif opt in ('-d', '--database'):
+            dbase = arg
+
+    hduid = uuid.UUID(os.popen(f"diskutil info {disk}| grep 'Volume UUID'").read().split()[2])
+    print(hduid)
+    exit()
+
+except go.GetoptError as e1:
     # Print something useful
-    print(f"**** error '{e}' occurred")
+    print(f"**** error e1 '{e1}' occurred")
+    sys.exit(2)
+except IndexError as e2:
+    print(f"**** error e2 '{e2}' occurred")
+    sys.exit(2)
+except Error as e2:
+    print(f"**** error e3 '{e3}' occurred")
     sys.exit(2)
 
+
+
+
+if os.geteuid() >  0:
+    print("ERROR: Must be root to use")
+    sys.exit(1)
+x = os.system("wmic diskdrive get serialnumber")
+print(x)
+
+
+
+sum = 0
 for opt, arg in opts:
     sum += int(arg)
 
