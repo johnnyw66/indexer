@@ -10,17 +10,51 @@ import sqlite3
 import platform
 from sqlite3 import Error
 
+create_harddrive_table = """
+CREATE TABLE IF NOT EXISTS harddrives (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  uid TEXT NOT NULL,
+  rootdir TEXT NOT NULL,
+  name TEXT NOT NULL UNIQUE,
+  UNIQUE(uid,rootdir)
+
+);
+"""
+
+insert_harddrive = """
+INSERT INTO
+  `harddrives` (`uid`, `name`, `rootDir`)
+VALUES (?, ?, ?) ;
+"""
+
+query_all_harddrives = """
+SELECT id, uid as hdid, name as name, rootdir  FROM `harddrives`
+"""
+
+
+query_driveid = """
+SELECT id  FROM `harddrives` WHERE uid =
+"""
+
+query_drivenames = """
+SELECT *  FROM `harddrives` WHERE name =
+"""
+
+query_count_harddrives = """
+SELECT count(*) FROM `harddrives`
+"""
 
 
 create_fileindex_table = """
 CREATE TABLE IF NOT EXISTS fileindex (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  hdrive_uid TEXT NOT NULL,
+  hdrive_id INTEGER NOT NULL,
   fname TEXT NOT NULL,
   path TEXT NOT NULL,
   hash TEXT NOT NULL,
   size INTEGER NOT NULL,
-  UNIQUE(hdrive_uid,path,fname)
+  FOREIGN KEY(hdrive_id) REFERENCES harddrives(id),
+  UNIQUE(hdrive_id,path,fname)
 
 );
 """
@@ -29,7 +63,7 @@ CREATE TABLE IF NOT EXISTS fileindex (
 
 insert_fileindex = """
 INSERT INTO
-  `fileindex` (`hdrive_uid`, `fname`, `path`, `hash`,`size`)
+  `fileindex` (`hdrive_id`, `fname`, `path`, `hash`,`size`)
 VALUES (?, ?, ?, ?, ?) ;
 """
 
@@ -39,7 +73,8 @@ SELECT count(*) FROM `fileindex`
 
 
 query_all_fileindex = """
-SELECT id, hdrive_uid as hdid, fname as file, path, hash, size FROM `fileindex`
+SELECT f.id, hdrive_id as hdid, fname as file, path, hash, size, h.name as harddrivename, h.uid  FROM `fileindex` f
+JOIN `harddrives` h ON h.id = hdid
 """
 
 def creation_date(path_to_file):
@@ -112,6 +147,7 @@ def execute_read_query(connection, query):
 
 def initTables(connection):
     execute_query(connection, create_fileindex_table)
+    execute_query(connection, create_harddrive_table)
 
 
 
@@ -124,8 +160,12 @@ def md5(fname):
     return hash_md5.hexdigest()
 
 
-def getRecordCount():
-    return 0
+#def getRecordCount(connection):
+    #query_driveid
+#    cursor = connection.cursor()
+#    cursor.execute_query(query,params)
+
+#    return 0
 
 
 def addFileIndexRecord(connection, harddriveid, filename, pathname, hash, sz):
@@ -133,13 +173,39 @@ def addFileIndexRecord(connection, harddriveid, filename, pathname, hash, sz):
     #  `fileindex` (`hdrive_uid`, `fname`, `path`, `hash`,`size`)
         print("addFileIndexRecord", harddriveid, filename, pathname, hash, sz)
 
-        lr = insert(connection, insert_fileindex,(harddriveid, filename, pathname, hash, sz))
+        lr = insert(connection, insert_fileindex, (harddriveid, filename, pathname, hash, sz))
         return lr
     except Error as e:
         #print(f"Ignore duplicate {e}")
         return -1
 
 
+
+def addHardDriveEntry(connection, harddriveid, name, rootDir):
+    try:
+        lr = insert(connection, insert_harddrive, (harddriveid, name, rootDir))
+        return lr
+    except Error as e:
+        return -1
+
+def getHardDriveIdFromUID(connection, uid):
+    cursor = connection.cursor()
+    results = None
+    try:
+        cursor.execute(f"{query_driveid}'{uid}'")
+        results = cursor.fetchall()
+        return dict(results[0])['id']
+    except Error as e:
+        print(f"The error '{e}' occurred")
+        return -1
+
+
+def debugAllHardDrives():
+    results=execute_read_query(connection, query_all_harddrives)
+
+    for result in results:
+        r = dict(result)
+        print(r)
 
 # Starts Here
 
@@ -148,7 +214,7 @@ print(f"Arguments of the script : {sys.argv[1:]}")
 
 argv = sys.argv[1:]
 try:
-    opts, args = go.getopt(argv, 'h:r:d:', ['disk','root', 'database'])
+    opts, args = go.getopt(argv, 'h:r:d:n:', ['disk','root', 'database', 'name'])
     print(opts)
     print(args)
     for opt, arg in opts:
@@ -157,6 +223,8 @@ try:
             disk = arg
         elif opt in ('-r', '--root'):
             root = arg
+        elif opt in ('-n', '--name'):
+            name = arg
         elif opt in ('-d', '--database'):
             dbase = arg
 
@@ -184,13 +252,14 @@ except Error as e2:
 
 
 
-id = uuid.uuid1()
-print ("uuid",id.hex)
-print (id)
-z = uuid.UUID(id.hex)
+harddriveid = hduid.hex
 
-if (z == id):
-    print("*****SAME*******!!!")
+#id = uuid.uuid1()
+#print ("uuid",id.hex)
+#print (id)
+#z = uuid.UUID(id.hex)
+#if (z == id):
+#    print("*****SAME*******!!!")
 
 
 connection = create_connection("/Users/johnny/.indexer.sqlite")
@@ -201,10 +270,19 @@ initTables(connection)
 #user_records = ", ".join(["%s"] * len(users[0]))
 #print(user_records)
 #insert_query = f"INSERT INTO fileindex (hdrive_uid, path, size, hash) VALUES {user_records}"
-#buildQuery(insert_query,users)
+
+#debugAllHardDrives()
 
 rootDir = root
 added = 0
+#def addHardDriveEntry(connection, harddriveid, name, rootDir):
+addHardDriveEntry(connection, harddriveid, name, rootDir)
+#results=execute_read_query(connection, query_driveid)
+
+# get HardDrive Index ID from harddriveid
+hdid = getHardDriveIdFromUID(connection,harddriveid)
+#print(hdid)
+
 
 for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
     print('Found directory: %s' % dirName)
@@ -217,7 +295,8 @@ for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
 #        print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, time.ctime(ctime), time.ctime(mtime) ))
         #print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, ctime, mtime ))
         #  `fileindex` (`hdrive_uid`, `fname`, `path`, `hash`,`size`)
-        lr = addFileIndexRecord(connection, disk, fname, dirName, md5h, sz)
+
+        lr = addFileIndexRecord(connection, hdid, fname, dirName, md5h, sz)
         if (lr > 0):
             added = added + 1
 
@@ -228,9 +307,21 @@ print("Added",added)
 results=execute_read_query(connection, query_count_fileindex)
 print("Number of Records",results[0][0])
 
-results=execute_read_query(connection, query_all_fileindex)
 
+results=execute_read_query(connection, query_all_fileindex)
 for result in results:
     r = dict(result)
-    #print(r)
-    print(r['id'], r['hdid'], r['file'], r['path'], r['hash'], r['size'])
+    print(r)
+    #print(r['id'], r['hdid'], r['file'], r['path'], r['hash'], r['size'])
+
+
+print("Name ",name)
+print("Name ",harddriveid)
+
+debugAllHardDrives()
+
+#results=execute_read_query(connection, query_all_harddrives)
+
+#for result in results:
+#    r = dict(result)
+#    print(r)
