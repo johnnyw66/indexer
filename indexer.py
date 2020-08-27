@@ -79,8 +79,14 @@ JOIN `harddrives` h ON h.id = hdid
 
 query_file_on_drive = """
 SELECT id,hash  FROM `fileindex` f
-WHERE f.hdrive_id = {hdid} AND f.path = '{path}' AND f.fname = \"{name}\"
+WHERE f.hdrive_id = {hdid} AND f.path = '{path}' AND f.fname = {quote}{name}{quote}
 """
+
+query_file_on_drive_org = """
+SELECT id,hash  FROM `fileindex` f
+WHERE f.hdrive_id = {hdid} AND f.path = '{path}' AND f.fname = '{name}'
+"""
+
 
 def creation_date(path_to_file):
     """
@@ -212,9 +218,17 @@ def debugAllHardDrives():
         print(r)
 
 
+
+def extractQuote(str):
+    return '"' if str.find("'") > -1 else "'"
+
+
+
 def entryExists(connection, hdid, fname, dirName):
-    query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'name' : fname})
+    query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'name' : fname, 'quote': extractQuote(fname)})
+    #print(query)
     results=execute_read_query(connection, query)
+    #print("entryExists returns ", len(results))
     if (results is None):
         print(f"******NONE TYPE***** \"{fname}\"")
         print("query", query)
@@ -227,7 +241,6 @@ def entryExists(connection, hdid, fname, dirName):
 
 def escape_quotes(str):
     return str.replace("'","\\'").replace('"','\\"')
-#    return str
 
 
 def findEntry(connection, hdid, fname, dirName):
@@ -284,8 +297,6 @@ print(f"Arguments of the script : {sys.argv[1:]}")
 #print(escape_quotes("'Hello World'"))
 #print(escape_quotes('"Hello World"'))
 
-#exit()
-
 argv = sys.argv[1:]
 bufsize = 4096
 
@@ -318,6 +329,7 @@ except IndexError as e2:
 except Error as e2:
     print(f"**** error e3 '{e3}' occurred")
     sys.exit(2)
+
 
 
 
