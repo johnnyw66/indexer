@@ -79,7 +79,7 @@ JOIN `harddrives` h ON h.id = hdid
 
 query_file_on_drive = """
 SELECT id,hash  FROM `fileindex` f
-WHERE f.hdrive_id = {hdid} AND f.path = '{path}' AND f.fname = '{name}'
+WHERE f.hdrive_id = {hdid} AND f.path = '{path}' AND f.fname = \"{name}\"
 """
 
 def creation_date(path_to_file):
@@ -214,16 +214,24 @@ def debugAllHardDrives():
 
 def entryExists(connection, hdid, fname, dirName):
     query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'name' : fname})
-    #print("entryExists", query)
     results=execute_read_query(connection, query)
+    if (results is None):
+        print(f"******NONE TYPE***** \"{fname}\"")
+        print("query", query)
+
     return (len(results) == 1)
 #    if (len(results) != 1):
 #        print("FOUND ONE THAT DID NOT EXIST", dirName, fname)
 #    return True
 
 
+def escape_quotes(str):
+    return str.replace("'","\\'").replace('"','\\"')
+#    return str
+
+
 def findEntry(connection, hdid, fname, dirName):
-    query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'name' : fname})
+    query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'name' : escape_quotes(fname)})
     results=execute_read_query(connection, query)
     return results[0]
 
@@ -236,28 +244,33 @@ def scanFiles(connection,rootDir, hdid, bufsize = 4096):
         #print('Found directory: %s' % dirName)
         for fname in fileList:
 #            if (True):
-            if (recalculateEntry or not entryExists(connection,hdid,fname,dirName)):
+            if (recalculateEntry or not entryExists(connection,hdid,escape_quotes(fname),dirName)):
                 ffname = dirName + "/" + fname
-                sz = os.path.getsize(ffname)
-                mtime = os.path.getmtime(ffname)
-                ctime = creation_date(ffname)
-                md5h = md5(ffname,bufsize)
-                #e = findEntry(connection,hdid,fname,dirName)
-                #if (e['hash'] != md5h):
-                #    print("compare failed",ffname,md5h,e['hash'])
-    #        print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, time.ctime(ctime), time.ctime(mtime) ))
-            #print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, ctime, mtime ))
-            #  `fileindex` (`hdrive_uid`, `fname`, `path`, `hash`,`size`)
-                if (not dryRun):
-                    lr = addFileIndexRecord(connection, hdid, fname, dirName, md5h, sz)
-                else:
-                    lr = 1
-                    print("DryRun ",hdid, dirName, fname, md5h)
+                try:
+                    sz = os.path.getsize(ffname)
+                    mtime = os.path.getmtime(ffname)
+                    ctime = creation_date(ffname)
+                    md5h = md5(ffname,bufsize)
+                    #e = findEntry(connection,hdid,fname,dirName)
+                    #if (e['hash'] != md5h):
+                    #    print("compare failed",ffname,md5h,e['hash'])
+                    #print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, time.ctime(ctime), time.ctime(mtime) ))
+                    #print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, ctime, mtime ))
 
-                if (lr > 0):
-                    added = added + 1
-                else:
-                    print("Add File Record failed",fname)
+                    if (not dryRun):
+                        lr = addFileIndexRecord(connection, hdid, fname, dirName, md5h, sz)
+                    else:
+                        lr = 1
+                        print("DryRun ",hdid, dirName, fname, md5h)
+
+                        if (lr > 0):
+                            added = added + 1
+                        else:
+                            print("Add File Record failed",fname)
+
+                except FileNotFoundError as fnf:
+                    print(f"File NOT FOUND! {ffname} ... Skipping")
+
             else:
                 skipped = skipped + 1
 
@@ -268,6 +281,10 @@ def scanFiles(connection,rootDir, hdid, bufsize = 4096):
 print(f"Name of the script      : {sys.argv[0]}")
 print(f"Arguments of the script : {sys.argv[1:]}")
 
+#print(escape_quotes("'Hello World'"))
+#print(escape_quotes('"Hello World"'))
+
+#exit()
 
 argv = sys.argv[1:]
 bufsize = 4096
