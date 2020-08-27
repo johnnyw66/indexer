@@ -28,7 +28,7 @@ VALUES (?, ?, ?) ;
 """
 
 query_all_harddrives = """
-SELECT id, uid as hdid, name as name, rootdir  FROM `harddrives`
+SELECT id, uid as uid, name as name, rootdir  FROM `harddrives`
 """
 
 
@@ -75,6 +75,11 @@ SELECT count(*) FROM `fileindex`
 query_all_fileindex = """
 SELECT f.id, hdrive_id as hdid, fname as file, path, hash, size, h.name as harddrivename, h.uid  FROM `fileindex` f
 JOIN `harddrives` h ON h.id = hdid
+"""
+
+query_file_on_drive = """
+SELECT id,hash  FROM `fileindex` f
+WHERE f.hdrive_id = {hdid} AND f.path = '{path}' AND f.fname = '{name}'
 """
 
 def creation_date(path_to_file):
@@ -150,12 +155,11 @@ def initTables(connection):
     execute_query(connection, create_harddrive_table)
 
 
-
-def md5(fname):
-    print("md5 of ",fname)
+def md5(fname, bsize = 4096):
+    print("calculating md5 of ",fname, "with buffer size",bsize)
     hash_md5 = hashlib.md5()
     with open(fname, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
+        for chunk in iter(lambda: f.read(bsize), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
@@ -207,14 +211,65 @@ def debugAllHardDrives():
         r = dict(result)
         print(r)
 
+
+def entryExists(connection, hdid, fname, dirName):
+    query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'name' : fname})
+    #print("entryExists", query)
+    results=execute_read_query(connection, query)
+    return (len(results) == 1)
+#    if (len(results) != 1):
+#        print("FOUND ONE THAT DID NOT EXIST", dirName, fname)
+#    return True
+
+
+def findEntry(connection, hdid, fname, dirName):
+    query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'name' : fname})
+    results=execute_read_query(connection, query)
+    return results[0]
+
+def scanFiles(connection,rootDir, hdid, bufsize = 4096):
+    added = 0
+    skipped = 0
+    recalculateEntry = False
+
+    for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
+        #print('Found directory: %s' % dirName)
+        for fname in fileList:
+#            if (True):
+            if (recalculateEntry or not entryExists(connection,hdid,fname,dirName)):
+                ffname = dirName + "/" + fname
+                sz = os.path.getsize(ffname)
+                mtime = os.path.getmtime(ffname)
+                ctime = creation_date(ffname)
+                md5h = md5(ffname,bufsize)
+                #e = findEntry(connection,hdid,fname,dirName)
+                #if (e['hash'] != md5h):
+                #    print("compare failed",ffname,md5h,e['hash'])
+    #        print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, time.ctime(ctime), time.ctime(mtime) ))
+            #print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, ctime, mtime ))
+            #  `fileindex` (`hdrive_uid`, `fname`, `path`, `hash`,`size`)
+                lr = addFileIndexRecord(connection, hdid, fname, dirName, md5h, sz)
+
+                if (lr > 0):
+                    added = added + 1
+                else:
+                    print("Add File Record failed",fname)
+            else:
+                skipped = skipped + 1
+
+    return added,skipped
+
 # Starts Here
 
 print(f"Name of the script      : {sys.argv[0]}")
 print(f"Arguments of the script : {sys.argv[1:]}")
 
+
 argv = sys.argv[1:]
+bufsize = 4096
+
 try:
-    opts, args = go.getopt(argv, 'h:r:d:n:', ['disk','root', 'database', 'name'])
+    opts, args = go.getopt(argv, 'h:r:d:n:b:', ['disk','root', 'database', 'name', 'bufsize'])
     print(opts)
     print(args)
     for opt, arg in opts:
@@ -223,6 +278,8 @@ try:
             disk = arg
         elif opt in ('-r', '--root'):
             root = arg
+        elif opt in ('-b', '--bufsize'):
+            bufsize = int(arg)
         elif opt in ('-n', '--name'):
             name = arg
         elif opt in ('-d', '--database'):
@@ -274,7 +331,6 @@ initTables(connection)
 #debugAllHardDrives()
 
 rootDir = root
-added = 0
 #def addHardDriveEntry(connection, harddriveid, name, rootDir):
 addHardDriveEntry(connection, harddriveid, name, rootDir)
 #results=execute_read_query(connection, query_driveid)
@@ -284,34 +340,20 @@ hdid = getHardDriveIdFromUID(connection,harddriveid)
 #print(hdid)
 
 
-for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
-    print('Found directory: %s' % dirName)
-    for fname in fileList:
-        ffname = dirName + "/" + fname
-        sz = os.path.getsize(ffname)
-        mtime = os.path.getmtime(ffname)
-        ctime = creation_date(ffname)
-        md5h = md5(ffname)
-#        print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, time.ctime(ctime), time.ctime(mtime) ))
-        #print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, ctime, mtime ))
-        #  `fileindex` (`hdrive_uid`, `fname`, `path`, `hash`,`size`)
-
-        lr = addFileIndexRecord(connection, hdid, fname, dirName, md5h, sz)
-        if (lr > 0):
-            added = added + 1
+added,skipped = scanFiles(connection,root, hdid, bufsize)
 
         # add to database
         # uuid + ffname is unique key
 
-print("Added",added)
+print("Added",added, "Skipped",skipped)
 results=execute_read_query(connection, query_count_fileindex)
 print("Number of Records",results[0][0])
 
 
 results=execute_read_query(connection, query_all_fileindex)
-for result in results:
-    r = dict(result)
-    print(r)
+#for result in results:
+#    r = dict(result)
+#    print(r)
     #print(r['id'], r['hdid'], r['file'], r['path'], r['hash'], r['size'])
 
 
