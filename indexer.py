@@ -248,7 +248,11 @@ def scanFiles(connection,rootDir, hdid, bufsize = 4096):
     #        print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, time.ctime(ctime), time.ctime(mtime) ))
             #print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, ctime, mtime ))
             #  `fileindex` (`hdrive_uid`, `fname`, `path`, `hash`,`size`)
-                lr = addFileIndexRecord(connection, hdid, fname, dirName, md5h, sz)
+                if (not dryRun):
+                    lr = addFileIndexRecord(connection, hdid, fname, dirName, md5h, sz)
+                else:
+                    lr = 1
+                    print("DryRun ",hdid, dirName, fname, md5h)
 
                 if (lr > 0):
                     added = added + 1
@@ -285,7 +289,7 @@ try:
         elif opt in ('-d', '--database'):
             dbase = arg
 
-    hduid = uuid.UUID(os.popen(f"diskutil info {disk}| grep 'Volume UUID'").read().split()[2])
+    hduid = uuid.UUID(os.popen(f"diskutil info '{disk}' | grep 'Volume UUID'").read().split()[2])
 
 except go.GetoptError as e1:
     # Print something useful
@@ -308,6 +312,7 @@ except Error as e2:
 
 
 
+dryRun = False
 
 harddriveid = hduid.hex
 
@@ -339,6 +344,7 @@ addHardDriveEntry(connection, harddriveid, name, rootDir)
 hdid = getHardDriveIdFromUID(connection,harddriveid)
 #print(hdid)
 
+print("Scanning files ", harddriveid, name, rootDir)
 
 added,skipped = scanFiles(connection,root, hdid, bufsize)
 
