@@ -88,6 +88,13 @@ SELECT id, hash, size, hdrive_id, fname, path FROM `fileindex` f
 WHERE f.hash='{hash}'
 """
 
+query_file_on_drive_from_name = """
+SELECT f.id, hash, size, hdrive_id, fname, path, h.name as harddrivename FROM `fileindex` f
+JOIN `harddrives` h ON h.id = hdrive_id
+WHERE fname LIKE '%{name}%' AND h.name LIKE '%{drivename}%'
+"""
+
+
 query_file_on_drive_org = """
 SELECT id, hash  FROM `fileindex` f
 WHERE f.hdrive_id = {hdid} AND f.path = '{path}' AND f.fname = '{name}'
@@ -271,6 +278,13 @@ def findEntryFromHash(connection, hash):
     results=execute_read_query(connection, query)
     return results
 
+
+def findEntryFromName(connection, name, drivename='%'):
+    query = query_file_on_drive_from_name.format(**{'name': name, 'drivename' : drivename})
+    print("findEntryFromName", query)
+    results=execute_read_query(connection, query)
+    return results
+
 def scanFiles(connection,rootDir, hdid, bufsize = 4096):
     added = 0
     skipped = 0
@@ -333,31 +347,40 @@ print(f"Arguments of the script : {sys.argv[1:]}")
 argv = sys.argv[1:]
 bufsize = 4096
 
+executeScanning = False
+executeQuery = False
+executeReporting = False
+
+
 try:
-    opts, args = go.getopt(argv, 'h:r:d:n:b:', ['disk','root', 'database', 'name', 'bufsize'])
+    opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['report','query','disk','root', 'database', 'name', 'bufsize', 'find', 'scanning'])
     print(opts)
     print(args)
     for opt, arg in opts:
         if opt in ('-h', '--disk'):
             print("DISK!!!!",arg)
             disk = arg
+        elif opt in ('-f', '--find'):
+            findname = arg
         elif opt in ('-r', '--root'):
             root = arg
         elif opt in ('-b', '--bufsize'):
             bufsize = int(arg)
         elif opt in ('-n', '--name'):
             name = arg
+        elif opt in ('--scanning'):
+            executeScanning = True
+        elif opt in ('--query'):
+            executeQuery = True
+        elif opt in ('--report'):
+            executeReporting = True
         elif opt in ('-d', '--database'):
             dbase = arg
 
-    hduid = uuid.UUID(os.popen(f"diskutil info '{disk}' | grep 'Volume UUID'").read().split()[2])
 
 except go.GetoptError as e1:
     # Print something useful
     print(f"**** error e1 '{e1}' occurred")
-    sys.exit(2)
-except IndexError as e2:
-    print(f"**** error e2 '{e2}' occurred")
     sys.exit(2)
 except Error as e2:
     print(f"**** error e3 '{e3}' occurred")
@@ -374,9 +397,6 @@ except Error as e2:
 
 
 
-dryRun = False
-
-harddriveid = hduid.hex
 
 #id = uuid.uuid1()
 #print ("uuid",id.hex)
@@ -386,40 +406,24 @@ harddriveid = hduid.hex
 #    print("*****SAME*******!!!")
 
 
-connection = create_connection("/Users/johnny/.indexer.sqlite")
+#connection = create_connection("/Users/johnny/.indexer.sqlite")
+connection = create_connection(dbase)
+
 initTables(connection)
 
-
-
-#user_records = ", ".join(["%s"] * len(users[0]))
-#print(user_records)
-#insert_query = f"INSERT INTO fileindex (hdrive_uid, path, size, hash) VALUES {user_records}"
-
-#debugAllHardDrives()
-
-rootDir = root
-#def addHardDriveEntry(connection, harddriveid, name, rootDir):
-addHardDriveEntry(connection, harddriveid, name, rootDir)
-#results=execute_read_query(connection, query_driveid)
-
-# get HardDrive Index ID from harddriveid
-hdid = getHardDriveIdFromUID(connection,harddriveid)
-#print(hdid)
-executeScanning = True
-executeQuery = True
-executeReporting = True
-
-if (executeScanning):
-    print("Scanning files ", harddriveid, name, rootDir)
-    added,skipped,errors = scanFiles(connection,root, hdid, bufsize)
-    print("Added", added, "Skipped", skipped, "Errors", errors)
+# Reporting
+if (executeReporting):
+    print("Reporting")
+    results=execute_read_query(connection, query_count_fileindex)
+    print("Number of Records",results[0][0])
+    debugAllHardDrives()
 
 if (executeQuery):
     print("Execute Query")
     fname = 'APKExternalNames.csv'
     dirName = '/Volumes/Seagate Backup Plus Drive/myDesktopJan162015'
 
-    findTest = findEntry(connection,hdid, escape_quotes(fname), escape_quotes(dirName))
+    findTest = findEntry(connection,3, escape_quotes(fname), escape_quotes(dirName))
     print("Result of Find Test",len(findTest))
     print(findTest)
     for result in findTest:
@@ -432,35 +436,50 @@ if (executeQuery):
         for res in findTest2:
             r2 = dict(res)
             print(r2)
-        findTest3 = findEntryFromHash(connection, '98b7be282899ad1ebfcec4a206a07e3d')
+
+    findTest3 = findEntryFromHash(connection, '98b7be282899ad1ebfcec4a206a07e3d')
         #findTest3 = findEntryFromHash(connection, '6350274352f317207bc5254dd2242cd9')
 #
-        print(findTest3)
-        for res in findTest3:
-            r2 = dict(res)
-            print(r2)
+    print(findTest3)
+    for res in findTest3:
+        r2 = dict(res)
+        print(r2)
 
+    #find selected files with filename and Optional HardDrive name
+    findTest4 = findEntryFromName(connection, 'renegade', "jkw")
+    #print(findTest4)
+    for res in findTest4:
+        r2 = dict(res)
+        print(r2)
 
-# add to database
-# uuid + ffname is unique key
-if (executeReporting):
-    results=execute_read_query(connection, query_count_fileindex)
-    print("Number of Records",results[0][0])
+#user_records = ", ".join(["%s"] * len(users[0]))
+#print(user_records)
+#insert_query = f"INSERT INTO fileindex (hdrive_uid, path, size, hash) VALUES {user_records}"
 
+#debugAllHardDrives()
 
-#results=execute_read_query(connection, query_all_fileindex)
-#for result in results:
-#    r = dict(result)
-#    print(r)
-    #print(r['id'], r['hdid'], r['file'], r['path'], r['hash'], r['size'])
+# Scanning
+if (executeScanning):
+    dryRun = False
 
-print("Name ",name)
-print("Name ",harddriveid)
+    try:
 
-debugAllHardDrives()
+        hduid = uuid.UUID(os.popen(f"diskutil info '{disk}' | grep 'Volume UUID'").read().split()[2])
 
-#results=execute_read_query(connection, query_all_harddrives)
+    except IndexError as e2:
+        print(f"**** error e2 '{e2}' occurred")
+        sys.exit(2)
 
-#for result in results:
-#    r = dict(result)
-#    print(r)
+    harddriveid = hduid.hex
+    rootDir = root
+    #def addHardDriveEntry(connection, harddriveid, name, rootDir):
+    addHardDriveEntry(connection, harddriveid, name, rootDir)
+    #results=execute_read_query(connection, query_driveid)
+
+    # get HardDrive Index ID from harddriveid
+    hdid = getHardDriveIdFromUID(connection,harddriveid)
+    #print(hdid)
+
+    print("Scanning files ", harddriveid, "name", name, "directory",rootDir)
+    added,skipped,errors = scanFiles(connection,root, hdid, bufsize)
+    print("Added", added, "Skipped", skipped, "Errors", errors)
