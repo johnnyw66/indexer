@@ -78,12 +78,18 @@ JOIN `harddrives` h ON h.id = hdid
 """
 
 query_file_on_drive = """
-SELECT id,hash  FROM `fileindex` f
-WHERE f.hdrive_id = {hdid} AND f.path = '{path}' AND f.fname = {quote}{name}{quote}
+SELECT id, hash  FROM `fileindex` f
+WHERE f.hdrive_id = {hdid} AND f.path = {quotepath}{path}{quotepath}
+AND f.fname = {quotename}{name}{quotename}
+"""
+
+query_file_on_drive_from_hash = """
+SELECT id, hash, size, hdrive_id, fname, path FROM `fileindex` f
+WHERE f.hash='{hash}'
 """
 
 query_file_on_drive_org = """
-SELECT id,hash  FROM `fileindex` f
+SELECT id, hash  FROM `fileindex` f
 WHERE f.hdrive_id = {hdid} AND f.path = '{path}' AND f.fname = '{name}'
 """
 
@@ -186,7 +192,7 @@ def addFileIndexRecord(connection, harddriveid, filename, pathname, hash, sz):
         lr = insert(connection, insert_fileindex, (harddriveid, filename, pathname, hash, sz))
         return lr
     except Error as e:
-        #print(f"Ignore duplicate {e}")
+        print(f"addFileIndex  {e}")
         return -1
 
 
@@ -225,7 +231,7 @@ def extractQuote(str):
 
 
 def entryExists(connection, hdid, fname, dirName):
-    query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'name' : fname, 'quote': extractQuote(fname)})
+    query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'quotepath': extractQuote(dirName), 'name' : fname, 'quotename': extractQuote(fname)})
     #print(query)
     results=execute_read_query(connection, query)
     #print("entryExists returns ", len(results))
@@ -237,33 +243,53 @@ def entryExists(connection, hdid, fname, dirName):
 #    if (len(results) != 1):
 #        print("FOUND ONE THAT DID NOT EXIST", dirName, fname)
 #    return True
+def entryExistsTest(connection, hdid, fname, dirName):
+    query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'quotepath': extractQuote(dirName), 'name' : fname, 'quotename': extractQuote(fname)})
+    print("query",query)
+    results=execute_read_query(connection, query)
+    #print("entryExists returns ", len(results))
+    if (results is None):
+        print(f"******NONE TYPE***** \"{fname}\"")
+        print("query", query)
 
+    return (len(results) == 1)
 
 def escape_quotes(str):
     return str.replace("'","\\'").replace('"','\\"')
 
 
 def findEntry(connection, hdid, fname, dirName):
-    query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'name' : escape_quotes(fname)})
+#    query = query_file_on_drive.format(**{'hdid': hdid, 'path': escape_quotes(dirName), 'name' : escape_quotes(fname)})
+    query = query_file_on_drive.format(**{'hdid': hdid, 'path': dirName, 'quotepath': extractQuote(dirName), 'name' : fname, 'quotename': extractQuote(fname)})
+
     results=execute_read_query(connection, query)
-    return results[0]
+    return results
+
+def findEntryFromHash(connection, hash):
+    query = query_file_on_drive_from_hash.format(**{'hash': hash})
+    print("findEntryFromHash", query)
+    results=execute_read_query(connection, query)
+    return results
 
 def scanFiles(connection,rootDir, hdid, bufsize = 4096):
     added = 0
     skipped = 0
+    errors = 0
     recalculateEntry = False
 
     for dirName, subdirList, fileList in os.walk(rootDir, topdown=False):
         #print('Found directory: %s' % dirName)
         for fname in fileList:
 #            if (True):
-            if (recalculateEntry or not entryExists(connection,hdid,escape_quotes(fname),dirName)):
+            if (recalculateEntry or not entryExists(connection,hdid,escape_quotes(fname),escape_quotes(dirName))):
                 ffname = dirName + "/" + fname
                 try:
                     sz = os.path.getsize(ffname)
                     mtime = os.path.getmtime(ffname)
                     ctime = creation_date(ffname)
                     md5h = md5(ffname,bufsize)
+                    entryExistsTest(connection,hdid,fname,dirName)
+
                     #e = findEntry(connection,hdid,fname,dirName)
                     #if (e['hash'] != md5h):
                     #    print("compare failed",ffname,md5h,e['hash'])
@@ -276,18 +302,25 @@ def scanFiles(connection,rootDir, hdid, bufsize = 4096):
                         lr = 1
                         print("DryRun ",hdid, dirName, fname, md5h)
 
-                        if (lr > 0):
-                            added = added + 1
-                        else:
-                            print("Add File Record failed",fname)
+                    if (lr > 0):
+                        added = added + 1
+                    else:
+                        print("***Add File Record failed****",fname)
+                        errors = errors + 1
+                        return added,skipped,errors
 
                 except FileNotFoundError as fnf:
                     print(f"File NOT FOUND! {ffname} ... Skipping")
+                    errors = errors + 1
+
+                except PermissionError as perr:
+                    print(f"PermissionError! {ffname} ... Skipping")
+                    errors = errors + 1
 
             else:
                 skipped = skipped + 1
 
-    return added,skipped
+    return added,skipped,errors
 
 # Starts Here
 
@@ -372,25 +405,54 @@ addHardDriveEntry(connection, harddriveid, name, rootDir)
 # get HardDrive Index ID from harddriveid
 hdid = getHardDriveIdFromUID(connection,harddriveid)
 #print(hdid)
+executeScanning = True
+executeQuery = True
+executeReporting = True
 
-print("Scanning files ", harddriveid, name, rootDir)
+if (executeScanning):
+    print("Scanning files ", harddriveid, name, rootDir)
+    added,skipped,errors = scanFiles(connection,root, hdid, bufsize)
+    print("Added", added, "Skipped", skipped, "Errors", errors)
 
-added,skipped = scanFiles(connection,root, hdid, bufsize)
+if (executeQuery):
+    print("Execute Query")
+    fname = 'APKExternalNames.csv'
+    dirName = '/Volumes/Seagate Backup Plus Drive/myDesktopJan162015'
 
-        # add to database
-        # uuid + ffname is unique key
+    findTest = findEntry(connection,hdid, escape_quotes(fname), escape_quotes(dirName))
+    print("Result of Find Test",len(findTest))
+    print(findTest)
+    for result in findTest:
+        r = dict(result)
+        print(r)
+        hash = r['hash']
+        findTest2 = findEntryFromHash(connection, hash)
+        print("Result of Find Test2",len(findTest2))
+        print(findTest2)
+        for res in findTest2:
+            r2 = dict(res)
+            print(r2)
+        findTest3 = findEntryFromHash(connection, '98b7be282899ad1ebfcec4a206a07e3d')
+        #findTest3 = findEntryFromHash(connection, '6350274352f317207bc5254dd2242cd9')
+#
+        print(findTest3)
+        for res in findTest3:
+            r2 = dict(res)
+            print(r2)
 
-print("Added",added, "Skipped",skipped)
-results=execute_read_query(connection, query_count_fileindex)
-print("Number of Records",results[0][0])
+
+# add to database
+# uuid + ffname is unique key
+if (executeReporting):
+    results=execute_read_query(connection, query_count_fileindex)
+    print("Number of Records",results[0][0])
 
 
-results=execute_read_query(connection, query_all_fileindex)
+#results=execute_read_query(connection, query_all_fileindex)
 #for result in results:
 #    r = dict(result)
 #    print(r)
     #print(r['id'], r['hdid'], r['file'], r['path'], r['hash'], r['size'])
-
 
 print("Name ",name)
 print("Name ",harddriveid)
