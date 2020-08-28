@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import subprocess
-
+from datetime import datetime
 import getopt as go
 import sys, os, fcntl, struct
 import time
@@ -173,9 +173,13 @@ def initTables(connection):
     execute_query(connection, create_fileindex_table)
     execute_query(connection, create_harddrive_table)
 
+def getTime():
+    return datetime.now().strftime("%H:%M:%S")
 
 def md5(fname, bsize = 4096):
-    print("calculating md5 of ",fname, "with buffer size",bsize)
+
+    print("%s calculating md5 of %s with buffer size %d" % (getTime(),fname,bsize))
+
     hash_md5 = hashlib.md5()
     with open(fname, "rb") as f:
         for chunk in iter(lambda: f.read(bsize), b""):
@@ -285,7 +289,7 @@ def findEntryFromName(connection, name, drivename='%'):
     results=execute_read_query(connection, query)
     return results
 
-def scanFiles(connection,rootDir, hdid, bufsize = 4096):
+def scanFiles(connection,rootDir, hdid, bufsize = 4096, dryRun = False):
     added = 0
     skipped = 0
     errors = 0
@@ -302,7 +306,8 @@ def scanFiles(connection,rootDir, hdid, bufsize = 4096):
                     mtime = os.path.getmtime(ffname)
                     ctime = creation_date(ffname)
                     md5h = md5(ffname,bufsize)
-                    entryExistsTest(connection,hdid,fname,dirName)
+
+                    #entryExistsTest(connection,hdid,fname,dirName)
 
                     #e = findEntry(connection,hdid,fname,dirName)
                     #if (e['hash'] != md5h):
@@ -321,7 +326,7 @@ def scanFiles(connection,rootDir, hdid, bufsize = 4096):
                     else:
                         print("***Add File Record failed****",fname)
                         errors = errors + 1
-                        return added,skipped,errors
+                        #return added,skipped,errors
 
                 except FileNotFoundError as fnf:
                     print(f"File NOT FOUND! {ffname} ... Skipping")
@@ -338,11 +343,9 @@ def scanFiles(connection,rootDir, hdid, bufsize = 4096):
 
 # Starts Here
 
-print(f"Name of the script      : {sys.argv[0]}")
-print(f"Arguments of the script : {sys.argv[1:]}")
 
-#print(escape_quotes("'Hello World'"))
-#print(escape_quotes('"Hello World"'))
+#print(f"Name of the script      : {sys.argv[0]}")
+#print(f"Arguments of the script : {sys.argv[1:]}")
 
 argv = sys.argv[1:]
 bufsize = 4096
@@ -350,33 +353,39 @@ bufsize = 4096
 executeScanning = False
 executeQuery = False
 executeReporting = False
+dryRun = False
+dbase = 'indexdb.sqlite'
 
 
 try:
-    opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['report','query','disk','root', 'database', 'name', 'bufsize', 'find', 'scanning'])
-    print(opts)
-    print(args)
+    #opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['report','query','disk','root', 'database', 'name', 'bufsize', 'find', 'scanning'])
+    opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['find','report','scanning','query','dryrun'])
+
+    print("opts",opts)
+    print("args",args)
     for opt, arg in opts:
-        if opt in ('-h', '--disk'):
-            print("DISK!!!!",arg)
+        #print("for>>>>>",opt,arg)
+
+        if opt in ('-h'):
             disk = arg
-        elif opt in ('-f', '--find'):
+        elif opt in ('-f'):
             findname = arg
-        elif opt in ('-r', '--root'):
+        elif opt in ('-r'):
             root = arg
-        elif opt in ('-b', '--bufsize'):
+        elif opt in ('-b'):
             bufsize = int(arg)
-        elif opt in ('-n', '--name'):
+        elif opt in ('-n'):
             name = arg
+        elif opt in ('-d'):
+            dbase = arg
+        elif opt in ('--dryrun'):
+            dryRun = True
         elif opt in ('--scanning'):
             executeScanning = True
-        elif opt in ('--query'):
+        elif opt in ('--query','--find'):
             executeQuery = True
         elif opt in ('--report'):
             executeReporting = True
-        elif opt in ('-d', '--database'):
-            dbase = arg
-
 
 except go.GetoptError as e1:
     # Print something useful
@@ -420,35 +429,10 @@ if (executeReporting):
 
 if (executeQuery):
     print("Execute Query")
-    fname = 'APKExternalNames.csv'
-    dirName = '/Volumes/Seagate Backup Plus Drive/myDesktopJan162015'
-
-    findTest = findEntry(connection,3, escape_quotes(fname), escape_quotes(dirName))
-    print("Result of Find Test",len(findTest))
-    print(findTest)
-    for result in findTest:
-        r = dict(result)
-        print(r)
-        hash = r['hash']
-        findTest2 = findEntryFromHash(connection, hash)
-        print("Result of Find Test2",len(findTest2))
-        print(findTest2)
-        for res in findTest2:
-            r2 = dict(res)
-            print(r2)
-
-    findTest3 = findEntryFromHash(connection, '98b7be282899ad1ebfcec4a206a07e3d')
-        #findTest3 = findEntryFromHash(connection, '6350274352f317207bc5254dd2242cd9')
-#
-    print(findTest3)
-    for res in findTest3:
-        r2 = dict(res)
-        print(r2)
-
     #find selected files with filename and Optional HardDrive name
-    findTest4 = findEntryFromName(connection, 'renegade', "jkw")
+    foundEntries = findEntryFromName(connection, findname, name)
     #print(findTest4)
-    for res in findTest4:
+    for res in foundEntries:
         r2 = dict(res)
         print(r2)
 
@@ -460,7 +444,6 @@ if (executeQuery):
 
 # Scanning
 if (executeScanning):
-    dryRun = False
 
     try:
 
@@ -481,5 +464,5 @@ if (executeScanning):
     #print(hdid)
 
     print("Scanning files ", harddriveid, "name", name, "directory",rootDir)
-    added,skipped,errors = scanFiles(connection,root, hdid, bufsize)
+    added,skipped,errors = scanFiles(connection,root, hdid, bufsize, dryRun)
     print("Added", added, "Skipped", skipped, "Errors", errors)
