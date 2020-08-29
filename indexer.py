@@ -3,6 +3,7 @@ import subprocess
 from datetime import datetime
 import getopt as go
 import sys, os, fcntl, struct
+#import os.path
 import time
 import hashlib
 import uuid
@@ -302,31 +303,32 @@ def scanFiles(connection,rootDir, hdid, bufsize = 4096, dryRun = False):
             if (recalculateEntry or not entryExists(connection,hdid,escape_quotes(fname),escape_quotes(dirName))):
                 ffname = dirName + "/" + fname
                 try:
-                    sz = os.path.getsize(ffname)
-                    mtime = os.path.getmtime(ffname)
-                    ctime = creation_date(ffname)
-                    md5h = md5(ffname,bufsize)
+                    if (not os.path.islink(ffname)):
+                        sz = os.path.getsize(ffname)
+                        mtime = os.path.getmtime(ffname)
+                        ctime = creation_date(ffname)
+                        md5h = md5(ffname,bufsize)
 
-                    #entryExistsTest(connection,hdid,fname,dirName)
+                        #entryExistsTest(connection,hdid,fname,dirName)
 
-                    #e = findEntry(connection,hdid,fname,dirName)
-                    #if (e['hash'] != md5h):
-                    #    print("compare failed",ffname,md5h,e['hash'])
-                    #print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, time.ctime(ctime), time.ctime(mtime) ))
-                    #print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, ctime, mtime ))
+                        #e = findEntry(connection,hdid,fname,dirName)
+                        #if (e['hash'] != md5h):
+                        #    print("compare failed",ffname,md5h,e['hash'])
+                        #print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, time.ctime(ctime), time.ctime(mtime) ))
+                        #print('\t%s\t%s\t%s\t%d\t%s\t%s' % (fname, dirName, md5h, sz, ctime, mtime ))
 
-                    if (not dryRun):
-                        lr = addFileIndexRecord(connection, hdid, fname, dirName, md5h, sz)
-                    else:
-                        lr = 1
-                        print("DryRun ",hdid, dirName, fname, md5h)
+                        if (not dryRun):
+                            lr = addFileIndexRecord(connection, hdid, fname, dirName, md5h, sz)
+                        else:
+                            lr = 1
+                            print("DryRun ",hdid, dirName, fname, md5h)
 
-                    if (lr > 0):
-                        added = added + 1
-                    else:
-                        print("***Add File Record failed****",fname)
-                        errors = errors + 1
-                        #return added,skipped,errors
+                        if (lr > 0):
+                            added = added + 1
+                        else:
+                            print("***Add File Record failed****",fname)
+                            errors = errors + 1
+                            #return added,skipped,errors
 
                 except FileNotFoundError as fnf:
                     print(f"File NOT FOUND! {ffname} ... Skipping")
@@ -428,7 +430,7 @@ if (executeReporting):
     debugAllHardDrives()
 
 if (executeQuery):
-    print("Execute Query")
+    print("Execute Query",findname)
     #find selected files with filename and Optional HardDrive name
     foundEntries = findEntryFromName(connection, findname, name)
     #print(findTest4)
