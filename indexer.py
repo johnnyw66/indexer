@@ -95,6 +95,12 @@ JOIN `harddrives` h ON h.id = hdrive_id
 WHERE fname LIKE '%{name}%' AND h.name LIKE '%{drivename}%'
 """
 
+query_filepath_on_drive_from_name = """
+SELECT f.id, hash, size, hdrive_id, fname, path, h.name as harddrivename FROM `fileindex` f
+JOIN `harddrives` h ON h.id = hdrive_id
+WHERE (fname LIKE '%{name}%' OR path LIKE '%{name}%') AND h.name LIKE '%{drivename}%'
+"""
+
 
 query_file_on_drive_org = """
 SELECT id, hash  FROM `fileindex` f
@@ -284,8 +290,12 @@ def findEntryFromHash(connection, hash):
     return results
 
 
-def findEntryFromName(connection, name, drivename='%'):
-    query = query_file_on_drive_from_name.format(**{'name': name, 'drivename' : drivename})
+def findEntryFromName(connection, searchPath, name, drivename='%'):
+#    queryTemplate = query_file_on_drive_from_name
+#    queryTemplate = query_filepath_on_drive_from_name
+    queryTemplate = query_filepath_on_drive_from_name if (searchPath) else query_file_on_drive_from_name
+    query = queryTemplate.format(**{'name': name, 'drivename' : drivename})
+
     print("findEntryFromName", query)
     results=execute_read_query(connection, query)
     return results
@@ -369,12 +379,13 @@ executeScanning = False
 executeQuery = False
 executeReporting = False
 dryRun = False
+searchPath = False
 dbase = 'indexdb.sqlite'
 
 
 try:
     #opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['report','query','disk','root', 'database', 'name', 'bufsize', 'find', 'scanning'])
-    opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['find','report','scanning','query','dryrun'])
+    opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['find','report','scanning','query','dryrun','searchpath'])
 
     print("opts",opts)
     print("args",args)
@@ -401,6 +412,8 @@ try:
             executeQuery = True
         elif opt in ('--report'):
             executeReporting = True
+        elif opt in ('--searchpath'):
+            searchPath = True
 
 except go.GetoptError as e1:
     # Print something useful
@@ -445,7 +458,8 @@ if (executeReporting):
 if (executeQuery):
     print("Execute Query",findname)
     #find selected files with filename and Optional HardDrive name
-    foundEntries = findEntryFromName(connection, findname, name)
+    foundEntries = findEntryFromName(connection, searchPath , findname, name)
+#    foundEntries = findEntryFromName(connection, query_file_on_drive_from_name, findname, name)
     #print(findTest4)
     for res in foundEntries:
         r2 = dict(res)
