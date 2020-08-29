@@ -95,12 +95,17 @@ JOIN `harddrives` h ON h.id = hdrive_id
 WHERE fname LIKE '%{name}%' AND h.name LIKE '%{drivename}%'
 """
 
+#query_filepath_on_drive_from_name = """
+#SELECT f.id, hash, size, hdrive_id, fname, path, h.name as harddrivename FROM `fileindex` f
+#JOIN `harddrives` h ON h.id = hdrive_id
+#WHERE (fname LIKE '%{name}%' OR path LIKE '%{name}%') AND h.name LIKE '%{drivename}%'
+#"""
+
 query_filepath_on_drive_from_name = """
 SELECT f.id, hash, size, hdrive_id, fname, path, h.name as harddrivename FROM `fileindex` f
 JOIN `harddrives` h ON h.id = hdrive_id
-WHERE (fname LIKE '%{name}%' OR path LIKE '%{name}%') AND h.name LIKE '%{drivename}%'
+WHERE  path LIKE '%{name}%' AND h.name LIKE '%{drivename}%'
 """
-
 
 query_file_on_drive_org = """
 SELECT id, hash  FROM `fileindex` f
@@ -464,7 +469,8 @@ if (executeQuery):
     for res in foundEntries:
         r2 = dict(res)
         print(r2)
-
+    print("Found",len(foundEntries),"records")
+    
 #user_records = ", ".join(["%s"] * len(users[0]))
 #print(user_records)
 #insert_query = f"INSERT INTO fileindex (hdrive_uid, path, size, hash) VALUES {user_records}"
