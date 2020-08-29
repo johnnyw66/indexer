@@ -2,7 +2,7 @@
 import subprocess
 from datetime import datetime
 import getopt as go
-import sys, os, fcntl, struct
+import sys, os, fcntl, struct, stat
 #import os.path
 import time
 import hashlib
@@ -290,6 +290,14 @@ def findEntryFromName(connection, name, drivename='%'):
     results=execute_read_query(connection, query)
     return results
 
+def issocket(filename):
+    return stat.S_ISSOCK(os.stat(filename).st_mode)
+
+def validFile(filename):
+    return not os.path.islink(filename) and (stat.S_ISREG(os.stat(filename).st_mode) or stat.S_ISDIR(os.stat(filename).st_mode))
+
+
+
 def scanFiles(connection,rootDir, hdid, bufsize = 4096, dryRun = False):
     added = 0
     skipped = 0
@@ -303,7 +311,9 @@ def scanFiles(connection,rootDir, hdid, bufsize = 4096, dryRun = False):
             if (recalculateEntry or not entryExists(connection,hdid,escape_quotes(fname),escape_quotes(dirName))):
                 ffname = dirName + "/" + fname
                 try:
-                    if (not os.path.islink(ffname)):
+#                    if (not os.path.islink(ffname) and notissocket(ffname)):
+                    if(validFile(ffname)):
+
                         sz = os.path.getsize(ffname)
                         mtime = os.path.getmtime(ffname)
                         ctime = creation_date(ffname)
@@ -345,6 +355,9 @@ def scanFiles(connection,rootDir, hdid, bufsize = 4096, dryRun = False):
 
 # Starts Here
 
+#print(validFile('/Volumes/Backup Nov 2012/Library/Server/Mail/Data/spool/public/pickup'))
+#print(validFile( '/Volumes/Backup Nov 2012/Applications/Unity/MonoDevelop.app/Contents/Frameworks/Mono.framework/Versions/2.10.2/2.6'))
+#exit()
 
 #print(f"Name of the script      : {sys.argv[0]}")
 #print(f"Arguments of the script : {sys.argv[1:]}")
