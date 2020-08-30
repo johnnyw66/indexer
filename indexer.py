@@ -288,9 +288,9 @@ def findEntry(connection, hdid, fname, dirName):
     results=execute_read_query(connection, query)
     return results
 
-def findEntryFromHash(connection, hash):
+def findEntriesFromHash(connection, hash):
     query = query_file_on_drive_from_hash.format(**{'hash': hash})
-    print("findEntryFromHash", query)
+    print("findEntriesFromHash", query)
     results=execute_read_query(connection, query)
     return results
 
@@ -382,15 +382,18 @@ bufsize = 4096
 
 executeScanning = False
 executeQuery = False
+hashQuery = False
 executeReporting = False
 dryRun = False
 searchPath = False
+verbose = False
+
 dbase = 'indexdb.sqlite'
 
 
 try:
     #opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['report','query','disk','root', 'database', 'name', 'bufsize', 'find', 'scanning'])
-    opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['find','report','scanning','query','dryrun','searchpath'])
+    opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['find','report','scanning','query','dryrun','searchpath','hash','verbose'])
 
     print("opts",opts)
     print("args",args)
@@ -401,6 +404,8 @@ try:
             disk = arg
         elif opt in ('-f'):
             findname = arg
+        elif opt in ('-m'):
+            findhash = arg
         elif opt in ('-r'):
             root = arg
         elif opt in ('-b'):
@@ -415,10 +420,15 @@ try:
             executeScanning = True
         elif opt in ('--query','--find'):
             executeQuery = True
+        elif opt in ('--hash'):
+            hashQuery = True
+            executeQuery = True
         elif opt in ('--report'):
             executeReporting = True
         elif opt in ('--searchpath'):
             searchPath = True
+        elif opt in ('--verbose'):
+            verbose = True
 
 except go.GetoptError as e1:
     # Print something useful
@@ -463,14 +473,21 @@ if (executeReporting):
 if (executeQuery):
     print("Execute Query",findname)
     #find selected files with filename and Optional HardDrive name
-    foundEntries = findEntryFromName(connection, searchPath , findname, name)
+    if (hashQuery):
+        foundEntries = findEntriesFromHash(connection,findname)
+    else:
+        foundEntries = findEntryFromName(connection, searchPath , findname, name)
+
 #    foundEntries = findEntryFromName(connection, query_file_on_drive_from_name, findname, name)
     #print(findTest4)
     for res in foundEntries:
         r2 = dict(res)
-        print(r2)
+        if(verbose):
+            print(r2)
+        else:
+            print(r2['harddrivename'] + ":" + r2['path'] + "/" + r2['fname'])
     print("Found",len(foundEntries),"records")
-    
+
 #user_records = ", ".join(["%s"] * len(users[0]))
 #print(user_records)
 #insert_query = f"INSERT INTO fileindex (hdrive_uid, path, size, hash) VALUES {user_records}"
