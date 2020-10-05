@@ -10,6 +10,8 @@ import uuid
 import sqlite3
 import platform
 from sqlite3 import Error
+import constants
+
 
 create_harddrive_table = """
 CREATE TABLE IF NOT EXISTS harddrives (
@@ -38,7 +40,8 @@ SELECT id  FROM `harddrives` WHERE uid =
 """
 
 query_drivenames = """
-SELECT *  FROM `harddrives` WHERE name =
+SELECT *  FROM `harddrives`
+WHERE name LIKE '%{drivename}%'
 """
 
 query_count_harddrives = """
@@ -113,6 +116,14 @@ WHERE f.hdrive_id = {hdid} AND f.path = '{path}' AND f.fname = '{name}'
 """
 
 
+def log(*args):
+    if (constants.DEBUG):
+        print(args)
+
+def error(*args):
+    print('*** ERROR ***', args)
+
+
 def creation_date(path_to_file):
     """
     Try to get the date that a file was created, falling back to when it was
@@ -136,30 +147,21 @@ def create_connection(path):
     try:
         connection = sqlite3.connect(path)
         connection.row_factory = sqlite3.Row  #this for getting the column names!
-        print("Connection to SQLite DB successful")
+        print("Connection to SQLite DB successful.")
     except Error as e:
-        print(f"The error '{e}' occurred")
+        error(f"The error '{e}' occurred")
 
     return connection
 
-def execute_query(connection, query):
-    cursor = connection.cursor()
-    try:
-        cursor.execute(query)
-        connection.commit()
-        print("Query executed successfully")
-    except Error as e:
-        print(f"The error '{e}' occurred")
-
 
 def execute_query(connection, query):
     cursor = connection.cursor()
     try:
         cursor.execute(query)
         connection.commit()
-        print("Query executed successfully")
+        log(f"Query '{query}'executed successfully")
     except Error as e:
-        print(f"The error '{e}' occurred")
+        error(f"The error '{e}' occurred")
 
 
 def insert(connection, query, params):
@@ -179,7 +181,7 @@ def execute_read_query(connection, query):
         results = cursor.fetchall()
         return results
     except Error as e:
-        print(f"The error '{e}' occurred")
+        error(f"The error '{e}' occurred")
 
 def initTables(connection):
     execute_query(connection, create_fileindex_table)
@@ -215,7 +217,7 @@ def addFileIndexRecord(connection, harddriveid, filename, pathname, hash, sz):
         lr = insert(connection, insert_fileindex, (harddriveid, filename, pathname, hash, sz))
         return lr
     except Error as e:
-        print(f"addFileIndex  {e}")
+        error(f"addFileIndex  {e}")
         return -1
 
 
@@ -235,7 +237,7 @@ def getHardDriveIdFromUID(connection, uid):
         results = cursor.fetchall()
         return dict(results[0])['id']
     except Error as e:
-        print(f"The error '{e}' occurred")
+        error(f"The error '{e}' occurred")
         return -1
 
 
@@ -251,6 +253,17 @@ def debugAllHardDrives():
 def extractQuote(str):
     return '"' if str.find("'") > -1 else "'"
 
+
+def reportHardDrives(connection, hdid="%"):
+    query = query_drivenames.format(**{'drivename': hdid })
+    results=execute_read_query(connection, query)
+    for result in results:
+        r = dict(result)
+        #print(r)
+        print(f"name: {r['name']}, uid: {r['uid']} volume:  {r['rootdir']}")
+
+    print("Total number of drives: ", len(results))
+    return(len(results), results)
 
 
 def entryExists(connection, hdid, fname, dirName):
@@ -356,11 +369,11 @@ def scanFiles(connection,rootDir, hdid, bufsize = 4096, dryRun = False):
                             #return added,skipped,errors
 
                 except FileNotFoundError as fnf:
-                    print(f"File NOT FOUND! {ffname} ... Skipping")
+                    error(f"File NOT FOUND! {ffname} ... Skipping")
                     errors = errors + 1
 
                 except PermissionError as perr:
-                    print(f"PermissionError! {ffname} ... Skipping")
+                    error(f"PermissionError! {ffname} ... Skipping")
                     errors = errors + 1
 
             else:
@@ -382,6 +395,8 @@ bufsize = 4096
 
 executeScanning = False
 executeQuery = False
+executeListDrives = False
+
 hashQuery = False
 executeReporting = False
 dryRun = False
@@ -393,7 +408,7 @@ dbase = 'indexdb.sqlite'
 
 try:
     #opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['report','query','disk','root', 'database', 'name', 'bufsize', 'find', 'scanning'])
-    opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['find','report','scanning','query','dryrun','searchpath','hash','verbose'])
+    opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['find','report','scanning','query','dryrun','searchpath','hash','verbose','listdrives'])
 
     print("opts",opts)
     print("args",args)
@@ -420,6 +435,8 @@ try:
             executeScanning = True
         elif opt in ('--query','--find'):
             executeQuery = True
+        elif opt in ('--listdrives'):
+            executeListDrives = True
         elif opt in ('--hash'):
             hashQuery = True
             executeQuery = True
@@ -432,10 +449,10 @@ try:
 
 except go.GetoptError as e1:
     # Print something useful
-    print(f"**** error e1 '{e1}' occurred")
+    error(f"**** error e1 '{e1}' occurred")
     sys.exit(2)
 except Error as e2:
-    print(f"**** error e3 '{e3}' occurred")
+    error(f"**** error e3 '{e3}' occurred")
     sys.exit(2)
 
 
@@ -464,6 +481,9 @@ connection = create_connection(dbase)
 initTables(connection)
 
 # Reporting
+if (executeListDrives):
+    reportHardDrives(connection, name if 'name' in globals() or 'name' in vars() else "%")
+
 if (executeReporting):
     print("Reporting")
     results=execute_read_query(connection, query_count_fileindex)
@@ -502,7 +522,7 @@ if (executeScanning):
         hduid = uuid.UUID(os.popen(f"diskutil info '{disk}' | grep 'Volume UUID'").read().split()[2])
 
     except IndexError as e2:
-        print(f"**** error e2 '{e2}' occurred")
+        error(f"**** error e2 '{e2}' occurred")
         sys.exit(2)
 
     harddriveid = hduid.hex
