@@ -117,7 +117,8 @@ WHERE f.hdrive_id = {hdid} AND f.path = '{path}' AND f.fname = '{name}'
 
 
 def log(*args):
-    if (constants.DEBUG):
+    #if (constants.DEBUG):
+    if (executeDebug):
         print(args)
 
 def error(*args):
@@ -396,6 +397,7 @@ bufsize = 4096
 executeScanning = False
 executeQuery = False
 executeListDrives = False
+executeDebug = False
 
 hashQuery = False
 executeReporting = False
@@ -408,7 +410,7 @@ dbase = 'indexdb.sqlite'
 
 try:
     #opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['report','query','disk','root', 'database', 'name', 'bufsize', 'find', 'scanning'])
-    opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['find','report','scanning','query','dryrun','searchpath','hash','verbose','listdrives'])
+    opts, args = go.getopt(argv, 'h:r:d:n:b:f:', ['find','report','scanning','query','dryrun','searchpath','hash','verbose','listdrives','debug'])
 
     print("opts",opts)
     print("args",args)
@@ -437,6 +439,8 @@ try:
             executeQuery = True
         elif opt in ('--listdrives'):
             executeListDrives = True
+        elif opt in ('--debug'):
+            executeDebug = True
         elif opt in ('--hash'):
             hashQuery = True
             executeQuery = True
