@@ -1,4 +1,4 @@
-diskutil info '/Volumes/MacBookAirTimeMachine/' | grep 'Volume UUID'
+diskutil info '/Volumes/Untitled/' | grep 'Volume UUID'
 
 #./indexer.py -h /Volumes/UNTITLED -r /Volumes/UNTITLED -d /Users/johnny/.indexer.sqlite -n jkw -b 32768 --scanning
 #./indexer.py -h '/Volumes/Seagate Backup Plus Drive/' -r '/Volumes/Seagate Backup Plus Drive/' -d '/Users/johnny/.indexer.sqlite' -n kenny -b 32768 --scanning
@@ -14,6 +14,8 @@ diskutil info '/Volumes/MacBookAirTimeMachine/' | grep 'Volume UUID'
 #./indexer.py -h '/Volumes/macosx/' -r '/Volumes/macosx/' -d '/Users/johnny/.indexer.sqlite' -n pedro -b 32768 --scanning
 #./indexer.py -h '/Volumes/BOOTCAMP/' -r '/Volumes/BOOTCAMP/' -d '/Users/johnny/.indexer.sqlite' -n charlie -b 32768 --scanning
 
+#./indexer.py -h /Volumes/Untitled -r /Volumes/Untitled -d /Users/johnny/.indexer.sqlite -n sabrent -b 32768 --scanning
+./indexer.py -h /Volumes/Untitled -r /Volumes/Untitled/indexer/ -d /Users/johnny/.indexer.sqlite -n sabrent2 -b 32768 --scanning
 
 ./indexer.py  -d '/Users/johnny/.indexer.sqlite' --report
 #./email.py -m 'Indexing Completed' -t 'johnnyw66@gmail.com' -s 'Indexing Job Complete'
