@@ -15,7 +15,10 @@ diskutil info '/Volumes/Untitled/' | grep 'Volume UUID'
 #./indexer.py -h '/Volumes/BOOTCAMP/' -r '/Volumes/BOOTCAMP/' -d '/Users/johnny/.indexer.sqlite' -n charlie -b 32768 --scanning
 
 #./indexer.py -h /Volumes/Untitled -r /Volumes/Untitled -d /Users/johnny/.indexer.sqlite -n sabrent -b 32768 --scanning
-./indexer.py -h /Volumes/Untitled -r /Volumes/Untitled/indexer/ -d /Users/johnny/.indexer.sqlite -n sabrent2 -b 32768 --scanning
+#./indexer.py -h /Volumes/Untitled -r /Volumes/Untitled/indexer/ -d /Users/johnny/.indexer.sqlite -n sabrent2 -b 32768 --scanning
 
-./indexer.py  -d '/Users/johnny/.indexer.sqlite' --report
+#./indexer.py  -d '/Users/johnny/.indexer.sqlite' --report
 #./email.py -m 'Indexing Completed' -t 'johnnyw66@gmail.com' -s 'Indexing Job Complete'
+
+./indexer.py -h '/Volumes/MediaDisc/' -r '/Volumes/MediaDisc/' -d /Users/johnny/.indexer.sqlite -n luther  -b 32768 --scanning
+

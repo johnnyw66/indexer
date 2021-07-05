@@ -531,8 +531,11 @@ if (executeScanning):
 
     harddriveid = hduid.hex
     rootDir = root
+    #print("HUID = ",harddriveid)
     #def addHardDriveEntry(connection, harddriveid, name, rootDir):
-    addHardDriveEntry(connection, harddriveid, name, rootDir)
+    if (addHardDriveEntry(connection, harddriveid, name, rootDir) < 0):
+        error(f"Failed to add drive in database - perhaps name '{name}' is not unique - check with list drives option.")
+        sys.exit(2)
     #results=execute_read_query(connection, query_driveid)
 
     # get HardDrive Index ID from harddriveid
